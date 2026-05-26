@@ -18,7 +18,7 @@ def extract_poster(soup2):
   else:
     return None
 
-def extract_link():
+def extract_link(soup2):
 
   return None
 
