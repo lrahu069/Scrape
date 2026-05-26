@@ -1,1 +1,27 @@
+name: runPYscrape
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
 
+jobs:
+  latestmovies:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.12' 
+
+    - name: Install Dependencies
+      run: pip install -r requirements.txt
+
+    - name: Run Scrapper
+      env:
+        URL: ${{ secrets.URL }}
+        API_KEY: ${{ secrets.API_KEY }}
+      run: python new_movies.py
