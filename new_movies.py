@@ -132,7 +132,7 @@ with sync_playwright() as p:
       supabase.table("latest_movies").upsert(data).execute()
       print('success!')
     except Exception as e:
-      sys.stderr.write(f"Error: on database insersion, Movie Title:{movie['title']}")
+      sys.stderr.write(f"{e}Error: on database insersion, Movie Title:{movie['title']}")
   #loop ends here
 
   #closes browser
