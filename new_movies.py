@@ -1,15 +1,33 @@
 import os
 import sys
 import random
+import requests
 from playwright.sync_api import sync_playwright
 from supabase import create_client, Client
 
 url: str = os.environ.get("URL")
 key: str = os.environ.get("API_KEY")
+tmdb_key: str = os.environ.get("TMDB_BEARER_KEY")
 
 supabase: Client = create_client(url,key)
 
 
+#default URLs
+base_url = "https://kuttymovies.mobile"
+movies_2026 = "/kuttymovies/tamil_2026_movies.html"
+
+tmdb_url = f'https://api.themoviedb.org/3/search/movie'
+img_base = 'https://image.tmdb.org/t/p/original'
+
+default_poster = 'https://xwlugrxwhfixzymgskrm.supabase.co/storage/v1/object/public/default_images/default_poster.png'
+default_backdrop = 'https://xwlugrxwhfixzymgskrm.supabase.co/storage/v1/object/public/default_images/default_backdrop.jpg'
+
+headers = {
+  "accept": "application/json",
+  "Authorization": f"Bearer {tmdb_key}"
+}
+
+#user-defined functions
 def safe_goto(page, url, timeout=80000):
   try:
     page.goto(url, timeout=timeout)
@@ -33,11 +51,9 @@ def get_resolution(quality):
     return quality.split(" ")[-2].strip("()")
   else:
     return start
-
   
-base_url = "https://kuttymovies.mobile"
-movies_2026 = "/kuttymovies/tamil_2026_movies.html"
 
+#Playwright starts from here
 with sync_playwright() as p:
   browser = p.chromium.launch(headless=True)
   # Launch with stealth-like settings
@@ -71,6 +87,9 @@ with sync_playwright() as p:
   page.route("**/*.mkv", lambda route: route.abort())
 
   for index,movie in enumerate(movies):
+
+    title = movie['title'].split("(")[0].strip()
+    year = movie['title'].split("(")[1].strip("()")
 
     #pg 2
     if not movie['nexthop2']:
@@ -153,20 +172,38 @@ with sync_playwright() as p:
       sys.stderr.write(f"\n can't access page8 content, check : {nexthop8}")
       continue
 
+    #fetching more info on that movie via TMDB API
+    response = requests.get(tmdb_url+f'?query={title}&year={year}', headers=headers)
+    mv_data = response.json()
+
+    if not mv_data['results']:
+      poster = default_poster
+      backdrop = default_backdrop
+      synopsis = 'No overview available'
+    else:
+      current_movie = mv_data['results'][0]
+      poster = img_base + current_movie['poster_path'] if current_movie['poster_path'] else default_poster
+      backdrop = img_base + current_movie['backdrop_path'] if current_movie['backdrop_path'] else default_backdrop
+      synopsis = current_movie['overview'] if current_movie['overview'] else 'No overview available'
+
 
     data = {
       'id': index + 1,
-      'title': movie['title'],
-      'poster': None,
-      'resolution': resolution,
+      'title': title,
+      'year': year,
+      'poster': poster,
+      'backdrop': backdrop,
+      'synopsis': synopsis,
+      'quality': resolution,
       'link': link,
     }
 
+    #pushes a tuple(data) into supabase
     try:
       supabase.table("latest_movies").upsert(data).execute()
-      print(f"Success! id:{index+1}, Movie Title:{movie['title']}")
+      print(f"Success! id:{index+1}, Movie Title:{title}")
     except Exception as e:
-      sys.stderr.write(f"DB Error:, Movie Title:{movie['title']}, {e}")
+      sys.stderr.write(f"DB Error:, Movie Title:{title}, {e}")
   #loop ends here
 
   #closes browser
