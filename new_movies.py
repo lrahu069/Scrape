@@ -1,5 +1,6 @@
 import os
 import sys
+import random
 from playwright.sync_api import sync_playwright
 from supabase import create_client, Client
 
@@ -9,6 +10,14 @@ key: str = os.environ.get("API_KEY")
 supabase: Client = create_client(url,key)
 
 
+def safe_goto(page, url, timeout=80000):
+  try:
+    page.goto(url, timeout=timeout)
+    return True
+  except Exception as e:
+    sys.stderr.write(f"\n❌ failed to load {url}: {e}\n")
+    return False
+
 def safe_get(currentpage, selector, attr=None):
   el = currentpage.query_selector(selector)
   if not el:
@@ -17,6 +26,14 @@ def safe_get(currentpage, selector, attr=None):
     return el.inner_text()
   else:
     return el.get_attribute(attr)
+  
+def get_resolution(quality):
+  start = quality.split(" ")[-1].strip("()")
+  if start[0].isalpha():
+    return quality.split(" ")[-2].strip("()")
+  else:
+    return start
+
   
 base_url = "https://kuttymovies.mobile"
 movies_2026 = "/kuttymovies/tamil_2026_movies.html"
@@ -31,10 +48,16 @@ with sync_playwright() as p:
   )
 
   page = context.new_page()
-  page.goto(base_url + movies_2026)
+  
+  try:
+    page.goto(base_url + movies_2026, timeout=80000)  # 80s
+  except Exception as e:
+    sys.stderr.write(f"\n❌ timeout/load error for '{base_url + movies_2026}': {e}\n")
+    browser.close()
+    sys.exit(1)
 
   # Add delay between actions to mimic humans
-  page.wait_for_timeout(1500)  # ms
+  page.wait_for_timeout(random.randint(2000, 4000))  # ms
 
   movies = []
   for movie in page.query_selector_all(".menu a"):
@@ -51,11 +74,12 @@ with sync_playwright() as p:
 
     #pg 2
     if not movie['nexthop2']:
-      sys.stderr.write('''can't access page1 content, broken address or url might have changed!
+      sys.stderr.write('''\n can't access page1 content, broken address or url might have changed!
         check : https://kuttymovies.mobile/kuttymovies/tamil_2026_movies.html''')
       continue
-    page.goto(base_url+movie['nexthop2'])
-    page.wait_for_timeout(1800)  # ms
+    if not safe_goto(page, base_url + movie['nexthop2']):
+      continue
+    page.wait_for_timeout(random.randint(2000, 4000))  # ms
     nexthop3 = safe_get(page, ".menu a", "href")
 
 
@@ -64,9 +88,11 @@ with sync_playwright() as p:
     if not nexthop3:
       sys.stderr.write(f"\n can't access page2 content, check : {movie['nexthop2']}")
       continue
-    page.goto(base_url+nexthop3)
-    page.wait_for_timeout(1000) #ms
-    resolution = safe_get(page, ".menu a")
+    if not safe_goto(page, base_url + nexthop3):
+      continue
+    page.wait_for_timeout(random.randint(2000, 4000)) #ms
+    quality = safe_get(page, ".menu a")
+    resolution = get_resolution(quality) if quality else None
     nexthop4 = safe_get(page, ".menu a", "href")
 
       
@@ -75,8 +101,9 @@ with sync_playwright() as p:
     if not nexthop4:
       sys.stderr.write(f"\n can't access page3 content, check : {nexthop3}")
       continue
-    page.goto(base_url+nexthop4)
-    page.wait_for_timeout(1300) #ms
+    if not safe_goto(page, base_url + nexthop4):
+      continue
+    page.wait_for_timeout(random.randint(2000, 4000)) #ms
     nexthop5 = safe_get(page, ".menu a", "href")
   
       
@@ -85,8 +112,9 @@ with sync_playwright() as p:
     if not nexthop5:
       sys.stderr.write(f"\n can't access page4 content, check : {nexthop4}")
       continue
-    page.goto(base_url+nexthop5)
-    page.wait_for_timeout(1700) #ms
+    if not safe_goto(page, base_url + nexthop5):
+      continue
+    page.wait_for_timeout(random.randint(2000, 4000)) #ms
     nexthop6 = safe_get(page, "center a", "href")
   
       
@@ -95,8 +123,9 @@ with sync_playwright() as p:
     if not nexthop6:
       sys.stderr.write(f"\n can't access page5 content, check : {nexthop5}")
       continue
-    page.goto(nexthop6)
-    page.wait_for_timeout(1300) #ms
+    if not safe_goto(page, nexthop6):
+      continue
+    page.wait_for_timeout(random.randint(2000, 4000)) #ms
     nexthop7 = safe_get(page, "center a", "href")
   
       
@@ -105,8 +134,9 @@ with sync_playwright() as p:
     if not nexthop7:
       sys.stderr.write(f"\n can't access page6 content, check : {nexthop6}")
       continue
-    page.goto(nexthop7)
-    page.wait_for_timeout(1800) #ms
+    if not safe_goto(page, nexthop7):
+      continue
+    page.wait_for_timeout(random.randint(2000, 4000)) #ms
     nexthop8 = safe_get(page, "center a", "href")
   
       
@@ -115,9 +145,13 @@ with sync_playwright() as p:
     if not nexthop8:
       sys.stderr.write(f"\n can't access page7 content, check : {nexthop7}")
       continue
-    page.goto(nexthop8)
-    page.wait_for_timeout(1300) #ms
+    if not safe_goto(page, nexthop8):
+      continue
+    page.wait_for_timeout(random.randint(2000, 4000)) #ms
     link = safe_get(page, "iframe", "src")
+    if not link:
+      sys.stderr.write(f"\n can't access page8 content, check : {nexthop8}")
+      continue
 
 
     data = {
@@ -130,9 +164,9 @@ with sync_playwright() as p:
 
     try:
       supabase.table("latest_movies").upsert(data).execute()
-      print('success!')
+      print(f"Success! id:{index+1}, Movie Title:{movie['title']}")
     except Exception as e:
-      sys.stderr.write(f"{e}Error: on database insersion, Movie Title:{movie['title']}")
+      sys.stderr.write(f"DB Error:, Movie Title:{movie['title']}, {e}")
   #loop ends here
 
   #closes browser
