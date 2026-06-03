@@ -27,4 +27,5 @@ jobs:
       env:
         URL: ${{ secrets.URL }}
         API_KEY: ${{ secrets.API_KEY }}
+        TMDB_BEARER_KEY: ${{ secrets.TMDB_BEARER_KEY }}
       run: python new_movies.py
