@@ -46,11 +46,7 @@ def safe_get(currentpage, selector, attr=None):
     return el.get_attribute(attr)
   
 def get_resolution(quality):
-  start = quality.split(" ")[-1].strip("()")
-  if start[0].isalpha():
-    return quality.split(" ")[-2].strip("()")
-  else:
-    return start
+  return quality.split(" ")[-1].strip()
   
 
 #Playwright starts from here
@@ -99,7 +95,9 @@ with sync_playwright() as p:
     if not safe_goto(page, base_url + movie['nexthop2']):
       continue
     page.wait_for_timeout(random.randint(2000, 4000))  # ms
-    nexthop3 = safe_get(page, ".menu a", "href")
+    quality = safe_get(page, ".menu a")
+    resolution = get_resolution(quality) if quality else None
+    nexthop3 = safe_get(page, ".menu a", "href") 
 
 
   
@@ -180,11 +178,13 @@ with sync_playwright() as p:
       poster = default_poster
       backdrop = default_backdrop
       synopsis = 'No overview available'
+      org_lang = 'N/A'
     else:
       current_movie = mv_data['results'][0]
       poster = img_base + current_movie['poster_path'] if current_movie['poster_path'] else default_poster
       backdrop = img_base + current_movie['backdrop_path'] if current_movie['backdrop_path'] else default_backdrop
       synopsis = current_movie['overview'] if current_movie['overview'] else 'No overview available'
+      org_lang = current_movie['original_language'] if current_movie['original_language'] else 'N/A'
 
 
     data = {
@@ -195,7 +195,8 @@ with sync_playwright() as p:
       'backdrop': backdrop,
       'synopsis': synopsis,
       'quality': resolution,
-      'link': link,
+      'orglang': org_lang,
+      'link': link
     }
 
     #pushes a tuple(data) into supabase
