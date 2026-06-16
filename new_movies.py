@@ -108,8 +108,6 @@ with sync_playwright() as p:
     if not safe_goto(page, base_url + nexthop3):
       continue
     page.wait_for_timeout(random.randint(2000, 4000)) #ms
-    quality = safe_get(page, ".menu a")
-    resolution = get_resolution(quality) if quality else None
     nexthop4 = safe_get(page, ".menu a", "href")
 
       
