@@ -1,0 +1,31 @@
+name: runPYscrape
+on:
+  schedule:
+    - cron: "0 0 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  latestmovies:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v6
+
+    - name: Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.12' 
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        playwright install chromium
+        playwright install-deps chromium
+
+    - name: Run Scrapper
+      env:
+        URL: ${{ secrets.URL }}
+        API_KEY: ${{ secrets.API_KEY }}
+        TMDB_BEARER_KEY: ${{ secrets.TMDB_BEARER_KEY }}
+      run: python new_movies.py
