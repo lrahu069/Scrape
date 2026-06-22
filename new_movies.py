@@ -8,16 +8,14 @@ from supabase import create_client, Client
 url: str = os.environ.get("URL")
 key: str = os.environ.get("API_KEY")
 tmdb_key: str = os.environ.get("TMDB_BEARER_KEY")
-
+#Creating a supabase client to access DB
 supabase: Client = create_client(url,key)
 
-#default URLs
+#Default URLs
 base_url = "https://kuttymovies1.fast"
 movies_2026 = "/kuttymovies/tamil_2026_movies.html"
-
 tmdb_url = f'https://api.themoviedb.org/3/search/movie'
 img_base = 'https://image.tmdb.org/t/p/original'
-
 default_poster = 'https://xwlugrxwhfixzymgskrm.supabase.co/storage/v1/object/public/default_images/default_poster.png'
 default_backdrop = 'https://xwlugrxwhfixzymgskrm.supabase.co/storage/v1/object/public/default_images/default_backdrop.jpg'
 
@@ -26,13 +24,16 @@ headers = {
   "Authorization": f"Bearer {tmdb_key}"
 }
 
-#user-defined functions
-movie_db = supabase.table("latest_movies").select("title").execute()
+movie_db = supabase.table("latest_movies").select("title, quality").execute()
 
-def movie_exists(title):
+#User-defined functions
+def movie_exists(title,quality):
   for movie_db_item in movie_db.data:
     if movie_db_item["title"] == title:
-      return True
+      if movie_db_item["quality"] == quality:
+        return True
+      else:
+        return False
     
   return False
 
@@ -52,15 +53,11 @@ def safe_get(currentpage, selector, attr=None):
     return el.inner_text()
   else:
     return el.get_attribute(attr)
-  
-def get_resolution(quality):
-  return quality.split(" ")[-1].strip()
-  
-
+   
 #Playwright starts from here
 with sync_playwright() as p:
   browser = p.chromium.launch(headless=True)
-  # Launch with stealth-like settings
+  #Launch with stealth-like settings
   context = browser.new_context(
     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     viewport={"width": 1280, "height": 720},
@@ -70,63 +67,63 @@ with sync_playwright() as p:
   page = context.new_page()
   
   try:
-    page.goto(base_url + movies_2026, timeout=80000)  # 80s
+    page.goto(base_url + movies_2026, timeout=80000)  #80s
   except Exception as e:
     sys.stderr.write(f"\n❌ timeout/load error for '{base_url + movies_2026}': {e}\n")
     browser.close()
     sys.exit(1)
 
-  # Add delay between actions to mimic humans
-  page.wait_for_timeout(random.randint(2000, 4000))  # ms
-
+  #Add delay between actions to mimic humans
+  page.wait_for_timeout(random.randint(2000, 4000))  #ms
+  #Grabs the list of movie containers and stores it in a variable
+  listofmovies = page.query_selector_all(".menu a")
   data = []
   movies = []
-  for movie in page.query_selector_all(".menu a"):
+  for movie in listofmovies:
     title = movie.inner_text().split("(")[0].strip()
     year = movie.inner_text().split("(")[1].strip("()")
-    exists = movie_exists(title)
+    nexthop2 = movie.get_attribute("href")
+    #pg 2
+    if not nexthop2:
+      sys.stderr.write(f"\n can't access page2 content, check : {base_url + nexthop2}")
+      continue
+    if not safe_goto(page, base_url + nexthop2):
+      continue
+    page.wait_for_timeout(random.randint(2000, 4000))  # ms
+    q = safe_get(page, ".menu a")
+    quality = q.split(" ")[-1].strip() if q else None
+    exists = movie_exists(title,quality)
+    nexthop3 = safe_get(page, ".menu a", "href")
     if not exists:
       movies.append({
         'title' : title,
         'year' : year,
-        'nexthop2' : movie.get_attribute("href")
+        'quality' : quality,
+        'nexthop3' : nexthop3
       })
 
-  if len(movies) > 0:
-    
-    #blocks the auto-download before it begins
+  if len(movies) > 0:    
+    #These two lines block any kind auto-download it begins
     page.route("**/*.mp4", lambda route: route.abort())
     page.route("**/*.mkv", lambda route: route.abort())
 
     for movie in movies:
       title = movie['title']
       year = movie['year']
-
-      #pg 2
-      if not movie['nexthop2']:
-        sys.stderr.write(f"\n can't access page1 content, broken address or url might have changed! check : {base_url + movies_2026}")
-        continue
-      if not safe_goto(page, base_url + movie['nexthop2']):
-        continue
-      page.wait_for_timeout(random.randint(2000, 4000))  # ms
-      quality = safe_get(page, ".menu a")
-      resolution = get_resolution(quality) if quality else None
-      nexthop3 = safe_get(page, ".menu a", "href") 
+      quality = movie['quality'] 
     
       #pg 3
-      if not nexthop3:
-        sys.stderr.write(f"\n can't access page2 content, check : {movie['nexthop2']}")
+      if not movie['nexthop3']:
+        sys.stderr.write(f"\n can't access page2 content, check : {base_url + movie['nexthop3']}")
         continue
-      if not safe_goto(page, base_url + nexthop3):
+      if not safe_goto(page, base_url + movie['nexthop3']):
         continue
       page.wait_for_timeout(random.randint(2000, 4000)) #ms
-      quality = safe_get(page, ".menu a")
-      resolution = get_resolution(quality) if quality else None
       nexthop4 = safe_get(page, ".menu a", "href")
 
       #pg 4
       if not nexthop4:
-        sys.stderr.write(f"\n can't access page3 content, check : {nexthop3}")
+        sys.stderr.write(f"\n can't access page3 content, check : {base_url + nexthop4}")
         continue
       if not safe_goto(page, base_url + nexthop4):
         continue
@@ -135,7 +132,7 @@ with sync_playwright() as p:
     
       #pg 5
       if not nexthop5:
-        sys.stderr.write(f"\n can't access page4 content, check : {nexthop4}")
+        sys.stderr.write(f"\n can't access page4 content, check : {base_url + nexthop5}")
         continue
       if not safe_goto(page, base_url + nexthop5):
         continue
@@ -144,7 +141,7 @@ with sync_playwright() as p:
     
       #pg 6
       if not nexthop6:
-        sys.stderr.write(f"\n can't access page5 content, check : {nexthop5}")
+        sys.stderr.write(f"\n can't access page5 content, check : {nexthop6}")
         continue
       if not safe_goto(page, nexthop6):
         continue
@@ -153,7 +150,7 @@ with sync_playwright() as p:
     
       #pg 7
       if not nexthop7:
-        sys.stderr.write(f"\n can't access page6 content, check : {nexthop6}")
+        sys.stderr.write(f"\n can't access page6 content, check : {nexthop7}")
         continue
       if not safe_goto(page, nexthop7):
         continue
@@ -162,7 +159,7 @@ with sync_playwright() as p:
     
       #pg 8 
       if not nexthop8:
-        sys.stderr.write(f"\n can't access page7 content, check : {nexthop7}")
+        sys.stderr.write(f"\n can't access page7 content, check : {nexthop8}")
         continue
       if not safe_goto(page, nexthop8):
         continue
@@ -194,7 +191,7 @@ with sync_playwright() as p:
         'poster': poster,
         'backdrop': backdrop,
         'synopsis': synopsis,
-        'quality': resolution,
+        'quality': quality,
         'orglang': org_lang,
         'link': link
       })      
