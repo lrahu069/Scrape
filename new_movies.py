@@ -78,28 +78,37 @@ with sync_playwright() as p:
   #Grabs the list of movie containers and stores it in a variable
   listofmovies = page.query_selector_all(".menu a")
   data = []
+  raw_movies = []
   movies = []
+
   for movie in listofmovies:
     title = movie.inner_text().split("(")[0].strip()
     year = movie.inner_text().split("(")[1].strip("()")
     nexthop2 = movie.get_attribute("href")
+    raw_movies.append({
+      'title' : title,
+      'year' : year,
+      'nexthop' : nexthop2
+    })
+
+  for movie in raw_movies:
     #pg 2
-    if not nexthop2:
-      sys.stderr.write(f"\n can't access page2 content, check : {base_url + nexthop2}")
+    if not movie['nexthop']:
+      sys.stderr.write(f"\n can't access {movie['title'] + movie['year']} content, check : {base_url + movies_2026}")
       continue
-    if not safe_goto(page, base_url + nexthop2):
+    if not safe_goto(page, base_url + movie['nexthop']):
       continue
     page.wait_for_timeout(random.randint(2000, 4000))  # ms
     q = safe_get(page, ".menu a")
     quality = q.split(" ")[-1].strip() if q else None
-    exists = movie_exists(title,quality)
+    exists = movie_exists(movie['title'],quality)
     nexthop3 = safe_get(page, ".menu a", "href")
     if not exists:
       movies.append({
-        'title' : title,
-        'year' : year,
+        'title' : movie['title'],
+        'year' : movie['year'],
         'quality' : quality,
-        'nexthop3' : nexthop3
+        'nexthop' : nexthop3
       })
 
   if len(movies) > 0:    
@@ -113,17 +122,17 @@ with sync_playwright() as p:
       quality = movie['quality'] 
     
       #pg 3
-      if not movie['nexthop3']:
-        sys.stderr.write(f"\n can't access page2 content, check : {base_url + movie['nexthop3']}")
+      if not movie['nexthop']:
+        sys.stderr.write(f"\n can't access page3 content, check : {movie['title'] + movie['year']} page 2 link")
         continue
-      if not safe_goto(page, base_url + movie['nexthop3']):
+      if not safe_goto(page, base_url + movie['nexthop']):
         continue
       page.wait_for_timeout(random.randint(2000, 4000)) #ms
       nexthop4 = safe_get(page, ".menu a", "href")
 
       #pg 4
       if not nexthop4:
-        sys.stderr.write(f"\n can't access page3 content, check : {base_url + nexthop4}")
+        sys.stderr.write(f"\n can't access page4 content, check : {base_url + movie['nexthop']}")
         continue
       if not safe_goto(page, base_url + nexthop4):
         continue
@@ -132,7 +141,7 @@ with sync_playwright() as p:
     
       #pg 5
       if not nexthop5:
-        sys.stderr.write(f"\n can't access page4 content, check : {base_url + nexthop5}")
+        sys.stderr.write(f"\n can't access page5 content, check : {base_url + nexthop4}")
         continue
       if not safe_goto(page, base_url + nexthop5):
         continue
@@ -141,7 +150,7 @@ with sync_playwright() as p:
     
       #pg 6
       if not nexthop6:
-        sys.stderr.write(f"\n can't access page5 content, check : {nexthop6}")
+        sys.stderr.write(f"\n can't access page6 content, check : {base_url + nexthop5}")
         continue
       if not safe_goto(page, nexthop6):
         continue
@@ -150,7 +159,7 @@ with sync_playwright() as p:
     
       #pg 7
       if not nexthop7:
-        sys.stderr.write(f"\n can't access page6 content, check : {nexthop7}")
+        sys.stderr.write(f"\n can't access page7 content, check : {nexthop6}")
         continue
       if not safe_goto(page, nexthop7):
         continue
@@ -159,14 +168,14 @@ with sync_playwright() as p:
     
       #pg 8 
       if not nexthop8:
-        sys.stderr.write(f"\n can't access page7 content, check : {nexthop8}")
+        sys.stderr.write(f"\n can't access page8 content, check : {nexthop7}")
         continue
       if not safe_goto(page, nexthop8):
         continue
       page.wait_for_timeout(random.randint(2000, 4000)) #ms
       link = safe_get(page, "iframe", "src")
       if not link:
-        sys.stderr.write(f"\n can't access page8 content, check : {nexthop8}")
+        sys.stderr.write(f"\n can't access streaming link, check: {nexthop8}")
         continue
 
       #fetching more info on that movie via TMDB API
