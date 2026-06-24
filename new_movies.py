@@ -23,10 +23,11 @@ headers = {
   "accept": "application/json",
   "Authorization": f"Bearer {tmdb_key}"
 }
+movie_db = supabase.table("latest_movies").select("id, title, quality").order("id").execute()
 
 #User-defined functions
 def movie_exists(title,quality):
-  movie_db = supabase.table("latest_movies").select("id, title, quality").order("id").execute()
+  global movie_db
   for movie_db_item in movie_db.data:
     if movie_db_item["title"] == title:
       if movie_db_item["quality"] == quality:
@@ -201,7 +202,7 @@ with sync_playwright() as p:
         poster = default_poster
         backdrop = default_backdrop
         synopsis = 'No overview available'
-        org_lang = 'N/A'
+        lang = 'N/A'
       else:
         current_movie = mv_data['results'][0]
         poster = img_base + current_movie['poster_path'] if current_movie['poster_path'] else default_poster
