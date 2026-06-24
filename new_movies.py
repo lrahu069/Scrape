@@ -24,15 +24,24 @@ headers = {
   "Authorization": f"Bearer {tmdb_key}"
 }
 
-movie_db = supabase.table("latest_movies").select("title, quality").execute()
-
 #User-defined functions
 def movie_exists(title,quality):
+  movie_db = supabase.table("latest_movies").select("id, title, quality").order("id").execute()
   for movie_db_item in movie_db.data:
     if movie_db_item["title"] == title:
       if movie_db_item["quality"] == quality:
         return True
       else:
+        # Step 1: Delete the duplicate row
+        dup_id = movie_db_item["id"]
+        supabase.table("latest_movies").delete().eq("id", dup_id).execute()
+        # Step 2: Fetch remaining rows ordered by id
+        response = supabase.table("latest_movies").select("id").order("id").execute()
+        rows = response.data  # [{"id": 1}, {"id": 2}, {"id": 4}, {"id": 5}]
+        # Step 3: Reassign ids sequentially
+        for new_index, row in enumerate(rows, start=1):
+          supabase.table("latest_movies").update({"id": new_index}).eq("id", row["id"]).execute()
+        movie_db = supabase.table("latest_movies").select("id, title, quality").order("id").execute()
         return False
     
   return False
@@ -53,6 +62,12 @@ def safe_get(currentpage, selector, attr=None):
     return el.inner_text()
   else:
     return el.get_attribute(attr)
+
+def classify_lang(language):
+  if language == 'ta':
+    return 'Tamil'
+  else:
+    return 'Tamil Dubbed'
    
 #Playwright starts from here
 with sync_playwright() as p:
@@ -192,7 +207,7 @@ with sync_playwright() as p:
         poster = img_base + current_movie['poster_path'] if current_movie['poster_path'] else default_poster
         backdrop = img_base + current_movie['backdrop_path'] if current_movie['backdrop_path'] else default_backdrop
         synopsis = current_movie['overview'] if current_movie['overview'] else 'No overview available'
-        org_lang = current_movie['original_language'] if current_movie['original_language'] else 'N/A'
+        lang = classify_lang(current_movie['original_language']) if current_movie['original_language'] else 'N/A'
 
       data.append({
         'title': title,
@@ -201,7 +216,7 @@ with sync_playwright() as p:
         'backdrop': backdrop,
         'synopsis': synopsis,
         'quality': quality,
-        'orglang': org_lang,
+        'language': lang,
         'link': link
       })      
     #loop ends here
@@ -224,7 +239,7 @@ with sync_playwright() as p:
           supabase.table("latest_movies").upsert(movie).execute()
           print(f"✅ id:{i+1}, Title:{movie['title']}")
         except Exception as e:
-          sys.stderr.write(f"DB Error: Title:{movie['title']}, {e}")
+          sys.stderr.write(f"DB Error❌: Title:{movie['title']}, {e}")
 
   else:
     print("No new movies found.")
